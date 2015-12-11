@@ -1322,6 +1322,16 @@ public class CallsManager extends Call.ListenerBase implements VideoProviderProx
         return count;
     }
 
+    int getNumTopLevelCalls() {
+        int count = 0;
+        for (Call call : mCalls) {
+            if (call.getParentCall() == null) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     Call getOutgoingCall() {
         return getFirstCallWithState(OUTGOING_CALL_STATES);
     }
@@ -1591,7 +1601,7 @@ public class CallsManager extends Call.ListenerBase implements VideoProviderProx
                 }
 
                 // If only call in call list is held call it's also a foreground call
-                if (mCalls.size() == 1 && call.getState() == CallState.ON_HOLD) {
+                if (getNumTopLevelCalls() == 1 && call.getState() == CallState.ON_HOLD) {
                     newForegroundCall = call;
                 }
 
@@ -1624,7 +1634,7 @@ public class CallsManager extends Call.ListenerBase implements VideoProviderProx
                 }
 
                 // If only call in call list is held call it's also a foreground call
-                if (mCalls.size() == 1 && call.getState() == CallState.ON_HOLD) {
+                if (getNumTopLevelCalls() == 1 && call.getState() == CallState.ON_HOLD) {
                     newForegroundCall = call;
                 }
 
