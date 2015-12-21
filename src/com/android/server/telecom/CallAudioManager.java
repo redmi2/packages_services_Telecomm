@@ -16,11 +16,19 @@
 
 package com.android.server.telecom;
 
+import android.app.ActivityManagerNative;
 import android.content.Context;
+import android.content.pm.UserInfo;
 import android.media.AudioManager;
+import android.media.IAudioService;
+import android.os.Binder;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
+import android.os.RemoteException;
+import android.os.ServiceManager;
+import android.os.UserHandle;
 import android.telecom.CallAudioState;
 
 import com.android.internal.util.IndentingPrintWriter;
@@ -86,9 +94,27 @@ final class CallAudioManager extends CallsManagerListenerBase
                 case MSG_AUDIO_MANAGER_SET_MICROPHONE_MUTE: {
                     boolean mute = (msg.arg1 != 0);
                     if (mute != mAudioManager.isMicrophoneMute()) {
-                        Log.i(this, "changing microphone mute state to: %b", mute);
-                        mAudioManager.setMicrophoneMute(mute);
+                        IAudioService audio = getAudioService();
+                        Log.i(this, "changing microphone mute state to: %b [serviceIsNull=%b]",
+                                mute, audio == null);
+                        if (audio != null) {
+                            try {
+                                // We use the audio service directly here so that we can specify
+                                // the current user. Telecom runs in the system_server process which
+                                // may run as a separate user from the foreground user. If we
+                                // used AudioManager directly, we would change mute for the system's
+                                // user and not the current foreground, which we want to avoid.
+                                audio.setMicrophoneMute(
+                                        mute, mContext.getOpPackageName(), getCurrentUserId());
+
+                            } catch (RemoteException e) {
+                                Log.e(this, e, "Remote exception while toggling mute.");
+                            }
+                            // TODO: Check microphone state after attempting to set to ensure that
+                            // our state corroborates AudioManager's state.
+                        }
                     }
+
                     break;
                 }
                 case MSG_AUDIO_MANAGER_REQUEST_AUDIO_FOCUS_FOR_CALL: {
@@ -457,7 +483,6 @@ final class CallAudioManager extends CallsManagerListenerBase
 
         // Audio route.
         if (mCallAudioState.getRoute() == CallAudioState.ROUTE_BLUETOOTH) {
-            turnOnSpeaker(false);
             turnOnBluetooth(true);
         } else if (mCallAudioState.getRoute() == CallAudioState.ROUTE_SPEAKER) {
             turnOnBluetooth(false);
@@ -514,8 +539,8 @@ final class CallAudioManager extends CallsManagerListenerBase
                 Log.v(this, "updateAudioStreamAndMode : no foreground, speeding up MT audio.");
                 requestAudioFocusAndSetMode(AudioManager.STREAM_VOICE_CALL,
                                                          AudioManager.MODE_IN_CALL);
-            } else if (foregroundCall != null && waitingForAccountSelectionCall == null
-                    && (foregroundCall.getState() != CallState.DISCONNECTED)) {
+            } else if (foregroundCall != null && !foregroundCall.isDisconnected() &&
+                    waitingForAccountSelectionCall == null) {
                 // In the case where there is a call that is waiting for account selection,
                 // this will fall back to abandonAudioFocus() below, which temporarily exits
                 // the in-call audio mode. This is to allow TalkBack to speak the "Call with"
@@ -533,7 +558,7 @@ final class CallAudioManager extends CallsManagerListenerBase
                 Log.v(this, "updateAudioStreamAndMode : tone playing");
                 requestAudioFocusAndSetMode(
                         AudioManager.STREAM_VOICE_CALL, mMostRecentlyUsedMode);
-            } else if (call == null) {
+            } else if (!hasRingingForegroundCall() && mCallsManager.hasOnlyDisconnectedCalls()) {
                 Log.v(this, "updateAudioStreamAndMode : no ringing call");
                 abandonAudioFocus();
             } else {
@@ -693,6 +718,23 @@ final class CallAudioManager extends CallsManagerListenerBase
 
     private boolean hasFocus() {
         return mAudioFocusStreamType != STREAM_NONE;
+    }
+
+    private IAudioService getAudioService() {
+        return IAudioService.Stub.asInterface(ServiceManager.getService(Context.AUDIO_SERVICE));
+    }
+
+    private int getCurrentUserId() {
+        final long ident = Binder.clearCallingIdentity();
+        try {
+            UserInfo currentUser = ActivityManagerNative.getDefault().getCurrentUser();
+            return currentUser.id;
+        } catch (RemoteException e) {
+            // Activity manager not running, nothing we can do assume user 0.
+        } finally {
+            Binder.restoreCallingIdentity(ident);
+        }
+        return UserHandle.USER_OWNER;
     }
 
     /**
