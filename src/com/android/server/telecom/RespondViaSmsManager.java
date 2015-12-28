@@ -33,6 +33,7 @@ import android.os.Message;
 import android.telecom.Response;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
+import android.text.TextUtils;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -165,7 +166,7 @@ public class RespondViaSmsManager extends CallsManagerListenerBase {
      */
     private void rejectCallWithMessage(Context context, String phoneNumber, String textMessage,
             int subId) {
-        if (textMessage != null) {
+        if (textMessage != null && !TextUtils.isEmpty(textMessage)) {
             final ComponentName component =
                     SmsApplication.getDefaultRespondViaMessageApplication(context,
                             true /*updateIfNeeded*/);
