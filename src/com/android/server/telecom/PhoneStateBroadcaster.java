@@ -72,7 +72,7 @@ final class PhoneStateBroadcaster extends CallsManagerListenerBase {
         if (mCallsManager.hasRingingCall()) {
             callState = TelephonyManager.CALL_STATE_RINGING;
         } else if (mCallsManager.getFirstCallWithState(CallState.DIALING, CallState.ACTIVE,
-                    CallState.ON_HOLD) != null) {
+                    CallState.ON_HOLD) != null && (mCallsManager.getNumTopLevelCalls() > 0)) {
             callState = TelephonyManager.CALL_STATE_OFFHOOK;
         }
         sendPhoneStateChangedBroadcast(call, callState);
