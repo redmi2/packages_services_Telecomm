@@ -137,4 +137,5 @@
 
     <!-- DO NOT TRANSLATE. Hardcoded number used for restricted incoming phone numbers. -->
     <string name="handle_restricted">RESTRICTED</string>
+    <string name="toast_make_video_call_failed">Can not make video call, incorrect number format</string>
 </resources>
